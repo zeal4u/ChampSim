@@ -475,8 +475,12 @@ void O3_CPU::dispatch_instruction()
     // Add to ROB
     ROB.push_back(DISPATCH_BUFFER.front());
     DISPATCH_BUFFER.pop_front();
+    ++num_issued;
     available_dispatch_bandwidth--;
   }
+
+  if (available_dispatch_bandwidth == 0)
+    ++count_max_issued;
 
   // check for deadlock
   if (!std::empty(DISPATCH_BUFFER) && (DISPATCH_BUFFER.front().event_cycle + DEADLOCK_CYCLE) <= current_cycle)
@@ -923,6 +927,9 @@ void O3_CPU::do_complete_execution(champsim::circular_buffer<ooo_model_instr>::i
 
   completed_executions++;
 
+  ++num_executed;
+  num_reg_writes += std::size(rob_it->destination_registers) - std::count(std::begin(rob_it->destination_registers), std::end(rob_it->destination_registers), 0);
+
   for (auto dependent : rob_it->registers_instrs_depend_on_me) {
     dependent->num_reg_dependent--;
     assert(dependent->num_reg_dependent >= 0);
@@ -965,6 +972,9 @@ void O3_CPU::complete_inflight_instruction()
 
       ++rob_it;
     }
+
+    if (complete_bw == 0)
+      ++count_max_executed;
   }
 }
 
@@ -1017,6 +1027,7 @@ void O3_CPU::handle_memory_return()
       auto it = l1i_entry.instr_depend_on_me.front();
       if ((it->instruction_pa >> LOG2_BLOCK_SIZE) == (l1i_entry.address >> LOG2_BLOCK_SIZE) && it->fetched != 0 && it->translated == COMPLETED) {
         it->fetched = COMPLETED;
+        ++num_fetched;
         available_fetch_bandwidth--;
       }
 
@@ -1028,6 +1039,9 @@ void O3_CPU::handle_memory_return()
       L1I_bus.PROCESSED.pop_front();
     --to_read;
   }
+
+  if (available_fetch_bandwidth == 0)
+    ++count_max_fetched;
 
   // Data Memory
   to_read = static_cast<CACHE*>(DTLB_bus.lower_level)->MAX_READ;
@@ -1124,6 +1138,9 @@ void O3_CPU::retire_rob()
     num_retired++;
     retire_bandwidth--;
   }
+
+  if (retire_bandwidth == 0)
+    ++count_max_retired;
 
   // Check for deadlock
   if (!std::empty(ROB) && (ROB.front().event_cycle + DEADLOCK_CYCLE) <= current_cycle)

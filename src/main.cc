@@ -1,9 +1,11 @@
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <fstream>
 #include <functional>
 #include <getopt.h>
 #include <iomanip>
+#include <numeric>
 #include <signal.h>
 #include <string.h>
 #include <vector>
@@ -297,6 +299,138 @@ void finish_warmup()
   }
 }
 
+std::pair<uint64_t, std::ofstream> init_dump(std::string_view arg)
+{
+  auto comma_pos = arg.find(',');
+  auto cycle_substr = arg.substr(0, comma_pos);
+
+  uint64_t dump_cycle;
+  std::from_chars(cycle_substr.data(), cycle_substr.data() + cycle_substr.size(), dump_cycle);
+  return {dump_cycle, std::ofstream{arg.substr(comma_pos+1).data()}};
+}
+
+void print_dump_header(std::ofstream& str)
+{
+  //cycle count
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_cycle_count" << ",";
+
+  //fetched instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_fetched" << ",";
+
+  //issued instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_issued" << ",";
+
+  //executed instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_executed" << ",";
+
+  //retired instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_retired" << ",";
+
+  //count of maximum fetch
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_max_fetch_bandwidth" << ",";
+
+  //count of maximum issued
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_max_issue_bandwidth" << ",";
+
+  //count of maximum executed
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_max_execute_bandwidth" << ",";
+
+  //count of maximum retired
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_max_retire_bandwidth" << ",";
+
+  //branch count
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_branch" << ",";
+
+  //branch misprediction count
+  for (O3_CPU *cpu : ooo_cpu)
+    str << "cpu" << cpu->cpu << "_branch_mispredict" << ",";
+
+  //cache hits
+  for (CACHE* cache : caches)
+    str << cache->NAME << "_hit" << ",";
+
+  //cache misses
+  for (CACHE* cache : caches)
+    str << cache->NAME << "_miss" << ",";
+
+  str << std::endl;
+}
+
+void print_dump_row(std::ofstream& str)
+{
+  //cycle count
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->current_cycle << ",";
+
+  //fetched instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->num_fetched << ",";
+
+  //issued instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->num_issued << ",";
+
+  //executed instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->num_executed << ",";
+
+  //retired instructions
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->num_retired << ",";
+
+  //count of maximum fetch
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->count_max_fetched << ",";
+
+  //count of maximum issued
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->count_max_issued << ",";
+
+  //count of maximum executed
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->count_max_executed << ",";
+
+  //count of maximum retired
+  for (O3_CPU *cpu : ooo_cpu)
+    str << cpu->count_max_retired << ",";
+
+  //branch count
+  for (O3_CPU *cpu : ooo_cpu)
+    str << std::accumulate(std::next(std::begin(cpu->total_branch_types)), std::end(cpu->total_branch_types), 0ull) << ",";
+
+  //branch misprediction count
+  for (O3_CPU *cpu : ooo_cpu)
+    str << std::accumulate(std::next(std::begin(cpu->branch_type_misses)), std::end(cpu->branch_type_misses), 0ull) << ",";
+
+  //cache hits
+  for (CACHE* cache : caches) {
+    uint64_t TOTAL_HIT = 0;
+    for (std::size_t i = 0; i < std::size(ooo_cpu); ++i)
+      TOTAL_HIT += std::accumulate(std::begin(cache->sim_hit[i]), std::end(cache->sim_hit[i]), 0ull);
+    str << TOTAL_HIT << ",";
+  }
+
+  //cache misses
+  for (CACHE* cache : caches) {
+    uint64_t TOTAL_MISS = 0;
+    for (std::size_t i = 0; i < std::size(ooo_cpu); ++i)
+      TOTAL_MISS += std::accumulate(std::begin(cache->sim_miss[i]), std::end(cache->sim_miss[i]), 0ull);
+    str << TOTAL_MISS << ",";
+  }
+
+  str << std::endl;
+}
+
 void signal_handler(int signal)
 {
   cout << "Caught signal: " << signal << endl;
@@ -316,6 +450,9 @@ int main(int argc, char** argv)
 
   // initialize knobs
   uint8_t show_heartbeat = 1;
+  uint64_t dump_period = 0;
+  uint64_t next_dump_cycle = 0;
+  std::ofstream dump_file;
 
   // check to see if knobs changed using getopt_long()
   int traces_encountered = 0;
@@ -323,11 +460,12 @@ int main(int argc, char** argv)
                                          {"simulation_instructions", required_argument, 0, 'i'},
                                          {"hide_heartbeat", no_argument, 0, 'h'},
                                          {"cloudsuite", no_argument, 0, 'c'},
+                                         {"dump", required_argument, 0, 'd'},
                                          {"traces", no_argument, &traces_encountered, 1},
                                          {0, 0, 0, 0}};
 
   int c;
-  while ((c = getopt_long_only(argc, argv, "w:i:hc", long_options, NULL)) != -1 && !traces_encountered) {
+  while ((c = getopt_long_only(argc, argv, "w:i:hcd:", long_options, NULL)) != -1 && !traces_encountered) {
     switch (c) {
     case 'w':
       warmup_instructions = atol(optarg);
@@ -341,6 +479,10 @@ int main(int argc, char** argv)
     case 'c':
       knob_cloudsuite = 1;
       MAX_INSTR_DESTINATIONS = NUM_INSTR_DESTINATIONS_SPARC;
+      break;
+    case 'd':
+      std::tie(dump_period, dump_file) = init_dump(optarg);
+      print_dump_header(dump_file);
       break;
     case 0:
       break;
@@ -396,6 +538,11 @@ int main(int argc, char** argv)
 
   // simulation entry point
   while (std::any_of(std::begin(simulation_complete), std::end(simulation_complete), std::logical_not<uint8_t>())) {
+
+    if (dump_period > 0 && all_warmup_complete > NUM_CPUS && ooo_cpu[0]->current_cycle >= next_dump_cycle) {
+      print_dump_row(dump_file);
+      next_dump_cycle = ooo_cpu[0]->current_cycle + dump_period;
+    }
 
     uint64_t elapsed_second = (uint64_t)(time(NULL) - start_time), elapsed_minute = elapsed_second / 60, elapsed_hour = elapsed_minute / 60;
     elapsed_minute -= elapsed_hour * 60;

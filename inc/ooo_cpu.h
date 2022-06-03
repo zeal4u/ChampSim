@@ -33,7 +33,7 @@ public:
   // instruction
   uint64_t instr_unique_id = 0, completed_executions = 0, begin_sim_cycle = 0, begin_sim_instr = 0, last_sim_cycle = 0, last_sim_instr = 0,
            finish_sim_cycle = 0, finish_sim_instr = 0, instrs_to_read_this_cycle = 0, instrs_to_fetch_this_cycle = 0,
-           next_print_instruction = STAT_PRINTING_PERIOD, num_retired = 0;
+           next_print_instruction = STAT_PRINTING_PERIOD;
   uint32_t inflight_reg_executions = 0, inflight_mem_executions = 0;
 
   struct dib_entry_t {
@@ -78,6 +78,9 @@ public:
   uint64_t num_branch = 0, branch_mispredictions = 0;
   uint64_t total_rob_occupancy_at_branch_mispredict;
 
+  uint64_t num_fetched = 0, num_issued = 0, num_executed = 0, num_retired = 0;
+  uint64_t count_max_fetched = 0, count_max_issued = 0, count_max_executed = 0, count_max_retired = 0;
+  uint64_t num_reg_writes = 0;
   uint64_t total_branch_types[8] = {};
   uint64_t branch_type_misses[8] = {};
 
