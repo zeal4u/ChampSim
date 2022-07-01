@@ -23,8 +23,6 @@ UINT64 instrCount = 0;
 
 std::ofstream outfile;
 
-trace_instr_format_t curr_instr;
-
 /* ===================================================================== */
 // Command line switches
 /* ===================================================================== */
@@ -60,10 +58,10 @@ INT32 Usage()
 // Analysis routines
 /* ===================================================================== */
 
-void ResetCurrentInstruction(VOID *ip)
+void ResetCurrentInstruction(VOID *inst, VOID *ip)
 {
-    curr_instr = {};
-    curr_instr.ip = (unsigned long long int)ip;
+  auto curr_instr = static_cast<trace_instr_format_t*>(inst);
+  curr_instr->ip = (unsigned long long int) ip;
 }
 
 BOOL ShouldWrite()
@@ -72,17 +70,19 @@ BOOL ShouldWrite()
   return (instrCount > KnobSkipInstructions.Value()) && (instrCount <= (KnobTraceInstructions.Value()+KnobSkipInstructions.Value()));
 }
 
-void WriteCurrentInstruction()
+void WriteCurrentInstruction(VOID *inst)
 {
+  auto curr_instr = static_cast<trace_instr_format_t*>(inst);
   typename decltype(outfile)::char_type buf[sizeof(trace_instr_format_t)];
-  std::memcpy(buf, &curr_instr, sizeof(trace_instr_format_t));
+  std::memcpy(buf, curr_instr, sizeof(trace_instr_format_t));
   outfile.write(buf, sizeof(trace_instr_format_t));
 }
 
-void BranchOrNot(UINT32 taken)
+void BranchOrNot(VOID *inst, UINT32 taken)
 {
-    curr_instr.is_branch = 1;
-    curr_instr.branch_taken = taken;
+  auto curr_instr = static_cast<trace_instr_format_t*>(inst);
+  curr_instr->is_branch = 1;
+  curr_instr->branch_taken = taken;
 }
 
 template <typename T>
@@ -100,12 +100,14 @@ void WriteToSet(T* begin, T* end, UINT32 r)
 // Is called for every instruction and instruments reads and writes
 VOID Instruction(INS ins, VOID *v)
 {
+    trace_instr_format_t curr_instr;
+
     // begin each instruction with this function
-    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)ResetCurrentInstruction, IARG_INST_PTR, IARG_END);
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)ResetCurrentInstruction, IARG_PTR, &curr_instr, IARG_INST_PTR, IARG_END);
 
     // instrument branch instructions
     if(INS_IsBranch(ins))
-        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)BranchOrNot, IARG_BRANCH_TAKEN, IARG_END);
+        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)BranchOrNot, IARG_PTR, &curr_instr, IARG_BRANCH_TAKEN, IARG_END);
 
     // instrument register reads
     UINT32 readRegCount = INS_MaxNumRRegs(ins);
