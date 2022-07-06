@@ -13,7 +13,7 @@
 
 #include "../../inc/trace_instruction.h"
 
-using trace_instr_format_t = input_instr;
+using trace_instr_format_t = opcode_input_instr;
 
 /* ================================================================== */
 // Global variables 
@@ -58,10 +58,11 @@ INT32 Usage()
 // Analysis routines
 /* ===================================================================== */
 
-void ResetCurrentInstruction(VOID *inst, VOID *ip)
+void ResetCurrentInstruction(VOID *inst, VOID *ip, OPCODE opcode)
 {
   auto curr_instr = static_cast<trace_instr_format_t*>(inst);
   curr_instr->ip = (unsigned long long int) ip;
+  curr_instr->opcode = opcode;
 }
 
 BOOL ShouldWrite()
@@ -103,7 +104,7 @@ VOID Instruction(INS ins, VOID *v)
     trace_instr_format_t curr_instr;
 
     // begin each instruction with this function
-    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)ResetCurrentInstruction, IARG_PTR, &curr_instr, IARG_INST_PTR, IARG_END);
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)ResetCurrentInstruction, IARG_PTR, &curr_instr, IARG_INST_PTR, IARG_UINT32, INS_Opcode(ins), IARG_END);
 
     // instrument branch instructions
     if(INS_IsBranch(ins))
