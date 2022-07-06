@@ -316,6 +316,7 @@ int main(int argc, char** argv)
 
   // initialize knobs
   uint8_t show_heartbeat = 1;
+  bool knob_opcodes = false;
 
   // check to see if knobs changed using getopt_long()
   int traces_encountered = 0;
@@ -323,6 +324,7 @@ int main(int argc, char** argv)
                                          {"simulation_instructions", required_argument, 0, 'i'},
                                          {"hide_heartbeat", no_argument, 0, 'h'},
                                          {"cloudsuite", no_argument, 0, 'c'},
+                                         {"opcodes", no_argument, 0, 'o'},
                                          {"traces", no_argument, &traces_encountered, 1},
                                          {0, 0, 0, 0}};
 
@@ -341,6 +343,9 @@ int main(int argc, char** argv)
     case 'c':
       knob_cloudsuite = 1;
       MAX_INSTR_DESTINATIONS = NUM_INSTR_DESTINATIONS_SPARC;
+      break;
+    case 'o':
+      knob_opcodes = true;
       break;
     case 0:
       break;
@@ -370,7 +375,7 @@ int main(int argc, char** argv)
   for (int i = optind; i < argc; i++) {
     std::cout << "CPU " << traces.size() << " runs " << argv[i] << std::endl;
 
-    traces.push_back(get_tracereader(argv[i], traces.size(), knob_cloudsuite));
+    traces.push_back(get_tracereader(argv[i], traces.size(), knob_cloudsuite + 2*knob_opcodes));
 
     if (traces.size() > NUM_CPUS) {
       printf("\n*** Too many traces for the configured number of cores ***\n\n");

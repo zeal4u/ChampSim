@@ -54,7 +54,26 @@ struct ooo_model_instr {
   std::array<std::vector<LSQ_ENTRY>::iterator, NUM_INSTR_SOURCES> lq_index = {};
   std::array<std::vector<LSQ_ENTRY>::iterator, NUM_INSTR_DESTINATIONS_SPARC> sq_index = {};
 
+  unsigned opcode = 0;
+
   ooo_model_instr() = default;
+
+  ooo_model_instr(uint8_t cpu, opcode_input_instr instr)
+  {
+    std::copy(std::begin(instr.destination_registers), std::end(instr.destination_registers), std::begin(this->destination_registers));
+    std::copy(std::begin(instr.destination_memory), std::end(instr.destination_memory), std::begin(this->destination_memory));
+    std::copy(std::begin(instr.source_registers), std::end(instr.source_registers), std::begin(this->source_registers));
+    std::copy(std::begin(instr.source_memory), std::end(instr.source_memory), std::begin(this->source_memory));
+
+    this->ip = instr.ip;
+    this->is_branch = instr.is_branch;
+    this->branch_taken = instr.branch_taken;
+
+    asid[0] = cpu;
+    asid[1] = cpu;
+
+    opcode = instr.opcode;
+  }
 
   ooo_model_instr(uint8_t cpu, input_instr instr)
   {

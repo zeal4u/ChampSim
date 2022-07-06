@@ -105,6 +105,31 @@ public:
   }
 };
 
+class opcode_tracereader : public tracereader
+{
+  ooo_model_instr last_instr;
+  bool initialized = false;
+
+public:
+  opcode_tracereader(uint8_t cpu, std::string _tn) : tracereader(cpu, _tn) {}
+
+  ooo_model_instr get()
+  {
+    ooo_model_instr trace_read_instr = read_single_instr<opcode_input_instr>();
+
+    if (!initialized) {
+      last_instr = trace_read_instr;
+      initialized = true;
+    }
+
+    last_instr.branch_target = trace_read_instr.ip;
+    ooo_model_instr retval = last_instr;
+
+    last_instr = trace_read_instr;
+    return retval;
+  }
+};
+
 class input_tracereader : public tracereader
 {
   ooo_model_instr last_instr;
@@ -130,10 +155,12 @@ public:
   }
 };
 
-tracereader* get_tracereader(std::string fname, uint8_t cpu, bool is_cloudsuite)
+tracereader* get_tracereader(std::string fname, uint8_t cpu, unsigned type)
 {
-  if (is_cloudsuite) {
+  if (type == 1) {
     return new cloudsuite_tracereader(cpu, fname);
+  } else if (type == 2) {
+    return new opcode_tracereader(cpu, fname);
   } else {
     return new input_tracereader(cpu, fname);
   }
