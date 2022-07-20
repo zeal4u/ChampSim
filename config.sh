@@ -75,7 +75,7 @@ default_ptw = { 'pscl5_set' : 1, 'pscl5_way' : 2, 'pscl4_set' : 1, 'pscl4_way': 
 config_file['physical_memory'] = ChainMap(config_file['physical_memory'], default_pmem.copy())
 config_file['virtual_memory'] = ChainMap(config_file['virtual_memory'], default_vmem.copy())
 
-cores = config_file.get('ooo_cpu', [{}])
+cores = copy.deepcopy(config_file.get('ooo_cpu', [{}]))
 
 # Index the cache array by names
 caches = {c['name']: c for c in config_file.get('cache',[])}
@@ -358,8 +358,17 @@ constants_file += '#endif\n'
 write_if_different(constants_header_name, constants_file)
 
 # Makefile
+if 'executable_name' not in config_file:
+    model_name = f"{config_file['ooo_cpu'][0]['branch_predictor']}-{config_file['L1I']['prefetcher']}-\
+        {config_file['L1D']['prefetcher']}-{config_file['L2C']['prefetcher']}-\
+        {config_file['LLC']['prefetcher']}-{config_file['LLC']['replacement']}-{config_file['num_cores']}core"
+    model_name = "bin/" + model_name.replace(" ","")
+    config_file['executable_name'] = model_name 
+
 module_info = tuple(itertools.chain(repl_data.values(), pref_data.values(), branch_data.values(), btb_data.values()))
 generated_files = (constants_header_name, instantiation_file_name, core_modules_file_name, cache_modules_file_name)
 write_if_different('_configuration.mk', 'generated_files = ' + ' '.join(generated_files) + '\n\n' + makefile.get_makefile_string(module_info, **config_file))
+
+print("Model Name:", config_file['executable_name'].replace("bin/", ""))
 
 # vim: set filetype=python:

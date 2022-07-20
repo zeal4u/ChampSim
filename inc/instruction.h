@@ -101,6 +101,8 @@ private:
   }
 
 public:
+  ooo_model_instr() = default;
+
   ooo_model_instr(uint8_t cpu, input_instr instr) : ooo_model_instr(instr)
   {
     asid[0] = cpu;

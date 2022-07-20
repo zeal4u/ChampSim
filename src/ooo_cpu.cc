@@ -139,11 +139,13 @@ void O3_CPU::do_init_instruction(ooo_model_instr& arch_instr)
     arch_instr.is_branch = 1;
     arch_instr.branch_taken = arch_instr.branch_taken; // don't change this
     arch_instr.branch_type = BRANCH_OTHER;
-  } else {
-    assert(!arch_instr.is_branch);
-    assert(arch_instr.branch_type == NOT_BRANCH);
-    arch_instr.branch_taken = 0;
   }
+  // TODO: It can be a branch in some other cases.
+  // } else {
+  //   assert(!arch_instr.is_branch);
+  //   assert(arch_instr.branch_type == NOT_BRANCH);
+  //   arch_instr.branch_taken = 0;
+  // }
 
   if (arch_instr.branch_taken != 1) {
     // clear the branch target for non-taken instructions
