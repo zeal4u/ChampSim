@@ -13,3 +13,17 @@ obj/
 
 tracer/pin/obj-intel64/
 
+results_200M/
+total_traces
+trace_list
+ipc1_public
+iprefetch_traces/
+
+*.log
+*.out
+.*
+debug*
+
+Makefile
+
+__pycache__

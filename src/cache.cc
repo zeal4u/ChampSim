@@ -209,12 +209,13 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
     std::cout << " full_addr: " << handle_pkt.address;
     std::cout << " full_v_addr: " << handle_pkt.v_address << std::dec;
     std::cout << " type: " << +handle_pkt.type;
-    std::cout << " cycle: " << current_cycle << std::endl;
+    std::cout << " cycle: " << current_cycle;
   });
 
   // check mshr
   auto mshr_entry = std::find_if(MSHR.begin(), MSHR.end(), eq_addr<PACKET>(handle_pkt.address, OFFSET_BITS));
   bool mshr_full = (MSHR.size() == MSHR_SIZE);
+
 
   if (mshr_entry != MSHR.end()) // miss already inflight
   {
@@ -224,7 +225,12 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
     packet_dep_merge(mshr_entry->lq_index_depend_on_me, handle_pkt.lq_index_depend_on_me);
     packet_dep_merge(mshr_entry->sq_index_depend_on_me, handle_pkt.sq_index_depend_on_me);
     packet_dep_merge(mshr_entry->instr_depend_on_me, handle_pkt.instr_depend_on_me);
-    packet_dep_merge(mshr_entry->to_return, handle_pkt.to_return);
+    packet_dep_merge(mshr_entry->to_return, handle_pkt.to_return); // can to_return be null ?
+
+    DP(if (warmup_complete[handle_pkt.cpu]) {
+      std::cout << "MERGED MSHR, MSHR entry to_return size:" << mshr_entry->to_return.size() << 
+                   "handle_pkt to_return size:" << handle_pkt.to_return.size() << std::endl;
+    })
 
     if (mshr_entry->type == PREFETCH && handle_pkt.type != PREFETCH) {
       // Mark the prefetch as useful
@@ -232,27 +238,33 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
         pf_useful++;
 
       uint64_t prior_event_cycle = mshr_entry->event_cycle;
+      auto to_return = mshr_entry->to_return;
       *mshr_entry = handle_pkt;
 
       // in case request is already returned, we should keep event_cycle
       mshr_entry->event_cycle = prior_event_cycle;
+      mshr_entry->to_return = to_return;
     }
   } else {
-    if (mshr_full)  // not enough MSHR resource
+    if (mshr_full) { // not enough MSHR resource
+      DP(if (warmup_complete[handle_pkt.cpu]) {std::cout << "MSHR FULL" << std::endl;})
       return false; // TODO should we allow prefetches anyway if they will not
                     // be filled to this level?
+    }
 
     bool is_read = prefetch_as_load || (handle_pkt.type != PREFETCH);
-
     // check to make sure the lower level queue has room for this read miss
     int queue_type = (is_read) ? 1 : 3;
-    if (lower_level->get_occupancy(queue_type, handle_pkt.address) == lower_level->get_size(queue_type, handle_pkt.address))
+    if (lower_level->get_occupancy(queue_type, handle_pkt.address) == lower_level->get_size(queue_type, handle_pkt.address)) {
+      DP(if (warmup_complete[handle_pkt.cpu]) {std::cout << "LOWER QUEUE FULL" << std::endl;})
       return false;
+    }
 
     // Allocate an MSHR
     if (handle_pkt.fill_level <= fill_level) {
       auto it = MSHR.insert(std::end(MSHR), handle_pkt);
       it->cycle_enqueued = current_cycle;
+      // zeal4u: this code snippet is good.
       it->event_cycle = std::numeric_limits<uint64_t>::max();
     }
 
@@ -261,13 +273,15 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
     else
       handle_pkt.to_return.clear();
 
-    if (!is_read)
-      lower_level->add_pq(&handle_pkt);
+    if (!is_read) // zeal4u: occupy an entry of rq if prefetch as load is true
+      lower_level->add_pq(&handle_pkt); 
     else
-      lower_level->add_rq(&handle_pkt);
+      lower_level->add_rq(&handle_pkt); 
+    DP(if (warmup_complete[handle_pkt.cpu]) {std::cout << "MSHR ADDED" << std::endl;})
   }
 
   // update prefetcher on load instructions and prefetches from upper levels
+  // zeal4u: the miss must have a valid MSHR entry
   if (should_activate_prefetcher(handle_pkt.type) && handle_pkt.pf_origin_level < fill_level) {
     cpu = handle_pkt.cpu;
     uint64_t pf_base_addr = (virtual_prefetch ? handle_pkt.v_address : handle_pkt.address) & ~bitmask(match_offset_bits ? 0 : OFFSET_BITS);
@@ -583,7 +597,7 @@ int CACHE::add_pq(PACKET* packet)
   PQ_ACCESS++;
 
   DP(if (warmup_complete[packet->cpu]) {
-    std::cout << "[" << NAME << "_WQ] " << __func__ << " instr_id: " << packet->instr_id << " address: " << std::hex << (packet->address >> OFFSET_BITS);
+    std::cout << "[" << NAME << "_PQ] " << __func__ << " instr_id: " << packet->instr_id << " address: " << std::hex << (packet->address >> OFFSET_BITS);
     std::cout << " full_addr: " << packet->address << " v_address: " << packet->v_address << std::dec << " type: " << +packet->type
               << " occupancy: " << RQ.occupancy();
   })
@@ -680,7 +694,8 @@ uint32_t CACHE::get_occupancy(uint8_t queue_type, uint64_t address)
     return WQ.occupancy();
   else if (queue_type == 3)
     return PQ.occupancy();
-
+  else if (queue_type == 4) // zeal4u: for Instruction Prefetcher
+    return VAPQ.occupancy();
   return 0;
 }
 
@@ -694,6 +709,8 @@ uint32_t CACHE::get_size(uint8_t queue_type, uint64_t address)
     return WQ.size();
   else if (queue_type == 3)
     return PQ.size();
+  else if (queue_type == 4) // zeal4u: for Instruction Prefetcher
+    return VAPQ.size();
 
   return 0;
 }

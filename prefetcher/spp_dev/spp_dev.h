@@ -1,6 +1,11 @@
 #ifndef SPP_H
 #define SPP_H
 
+#include <stdint.h>
+#include <iostream>
+
+using namespace std;
+
 // SPP functional knobs
 #define LOOKAHEAD_ON
 #define FILTER_ON

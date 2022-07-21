@@ -24,12 +24,12 @@ void O3_CPU::operate()
   operate_lsq();                   // execute memory transactions
 
   schedule_memory_instruction(); // schedule memory transactions
-  dispatch_instruction();        // dispatch
-  decode_instruction();          // decode
-  promote_to_decode();
+  dispatch_instruction();        // dispatch, zea4u: send inst to ROB
+  decode_instruction();          // decode, store inst in decode inst buffer, dispatch inst
+  promote_to_decode(); // send inst to decode buffer
   fetch_instruction(); // fetch
-  translate_fetch();
-  check_dib();
+  translate_fetch(); // zeal4u: tranlstate v_address of instructions.
+  check_dib(); // zeal4u: check if <fetch-width> instructions already decoded and cached.
 
   DISPATCH_BUFFER.operate();
   DECODE_BUFFER.operate();
@@ -298,6 +298,7 @@ void O3_CPU::translate_fetch()
   // scan through IFETCH_BUFFER to find instructions that need to be translated
   auto itlb_req_begin = std::find_if(IFETCH_BUFFER.begin(), IFETCH_BUFFER.end(), [](const ooo_model_instr& x) { return !x.translated; });
   uint64_t find_addr = itlb_req_begin->ip;
+  // zeal4u: translate the page address for a serial of instructions
   auto itlb_req_end = std::find_if(itlb_req_begin, IFETCH_BUFFER.end(),
                                    [find_addr](const ooo_model_instr& x) { return (find_addr >> LOG2_PAGE_SIZE) != (x.ip >> LOG2_PAGE_SIZE); });
   if (itlb_req_end != IFETCH_BUFFER.end() || itlb_req_begin == IFETCH_BUFFER.begin()) {
@@ -768,7 +769,7 @@ void O3_CPU::operate_lsq()
   }
 
   while (store_issued < SQ_WIDTH && !RTS1.empty()) {
-    execute_store(RTS1.front());
+    execute_store(RTS1.front()); // zeal4u: why not send stores to L1D ?
 
     RTS1.pop();
     store_issued++;
@@ -815,7 +816,7 @@ int O3_CPU::do_translate_store(std::vector<LSQ_ENTRY>::iterator sq_it)
   data_packet.sq_index_depend_on_me = {sq_it};
 
   DP(if (warmup_complete[cpu]) {
-    std::cout << "[RTS0] " << __func__ << " instr_id: " << sq_it->instr_id << " rob_index: " << sq_it->rob_index << " is popped from to RTS0" << std::endl;
+    std::cout << "[RTS0] " << __func__ << " instr_id: " << sq_it->instr_id << " is popped from to RTS0" << std::endl;
   })
 
   int rq_index = DTLB_bus.lower_level->add_rq(&data_packet);
@@ -878,7 +879,7 @@ int O3_CPU::do_translate_load(std::vector<LSQ_ENTRY>::iterator lq_it)
   data_packet.lq_index_depend_on_me = {lq_it};
 
   DP(if (warmup_complete[cpu]) {
-    std::cout << "[RTL0] " << __func__ << " instr_id: " << lq_it->instr_id << " rob_index: " << lq_it->rob_index << " is popped to RTL0" << std::endl;
+    std::cout << "[RTL0] " << __func__ << " instr_id: " << lq_it->instr_id << " is popped to RTL0" << std::endl;
   })
 
   int rq_index = DTLB_bus.lower_level->add_rq(&data_packet);

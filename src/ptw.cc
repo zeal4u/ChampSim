@@ -25,7 +25,7 @@ void PageTableWalker::handle_read()
   while (reads_this_cycle > 0 && RQ.has_ready() && std::size(MSHR) != MSHR_SIZE) {
     PACKET& handle_pkt = RQ.front();
 
-    DP(if (warmup_complete[packet->cpu]) {
+    DP(if (warmup_complete[handle_pkt.cpu]) {
       std::cout << "[" << NAME << "] " << __func__ << " instr_id: " << handle_pkt.instr_id;
       std::cout << " address: " << std::hex << (handle_pkt.address >> LOG2_PAGE_SIZE) << " full_addr: " << handle_pkt.address;
       std::cout << " full_v_addr: " << handle_pkt.v_address;
@@ -87,7 +87,7 @@ void PageTableWalker::handle_fill()
         fill_mshr->data = addr;
         fill_mshr->address = fill_mshr->v_address;
 
-        DP(if (warmup_complete[packet->cpu]) {
+        DP(if (warmup_complete[fill_mshr->cpu]) {
           std::cout << "[" << NAME << "] " << __func__ << " instr_id: " << fill_mshr->instr_id;
           std::cout << " address: " << std::hex << (fill_mshr->address >> LOG2_PAGE_SIZE) << " full_addr: " << fill_mshr->address;
           std::cout << " full_v_addr: " << fill_mshr->v_address;
@@ -120,7 +120,7 @@ void PageTableWalker::handle_fill()
         if (fill_mshr->translation_level == PSCL2.level)
           PSCL2.fill_cache(addr, fill_mshr->v_address);
 
-        DP(if (warmup_complete[packet->cpu]) {
+        DP(if (warmup_complete[fill_mshr->cpu]) {
           std::cout << "[" << NAME << "] " << __func__ << " instr_id: " << fill_mshr->instr_id;
           std::cout << " address: " << std::hex << (fill_mshr->address >> LOG2_PAGE_SIZE) << " full_addr: " << fill_mshr->address;
           std::cout << " full_v_addr: " << fill_mshr->v_address;
@@ -137,7 +137,7 @@ void PageTableWalker::handle_fill()
         packet.to_return = {this};
         packet.translation_level = fill_mshr->translation_level - 1;
 
-        int rq_index = lower_level->add_rq(&packet);
+        int rq_index = lower_level->add_rq(&packet); // zeal4u: send to L1D
         if (rq_index != -2) {
           fill_mshr->event_cycle = std::numeric_limits<uint64_t>::max();
           fill_mshr->address = packet.address;
