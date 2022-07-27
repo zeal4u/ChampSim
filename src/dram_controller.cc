@@ -112,6 +112,29 @@ void MEMORY_CONTROLLER::operate()
       }
     }
   }
+
+  // for measure bandwidth and feedback to pythia
+  if (current_cycle >= next_bw_measure_cycle)
+  {
+    uint64_t this_epoch_enqueue_count = rq_enqueue_count - last_enqueue_count;
+    epoch_enqueue_count = (epoch_enqueue_count / 2) + this_epoch_enqueue_count;
+    uint32_t quartile = ((float)100 * epoch_enqueue_count) / DRAM_DBUS_MAX_CAS;
+    uint8_t bw = 0;
+    if (quartile <= 25)
+      bw = 0;
+    else if (quartile <= 50)
+      bw = 1;
+    else if (quartile <= 75)
+      bw = 2;
+    else
+      bw = 3;
+    // MYLOG("cycle %lu rq_enqueue_count %lu last_enqueue_count %lu epoch_enqueue_count %lu QUARTILE %u", uncore.cycle, rq_enqueue_count, last_enqueue_count, epoch_enqueue_count, bw);
+    last_enqueue_count = rq_enqueue_count;
+    next_bw_measure_cycle = current_cycle + measure_dram_bw_epoch;
+    total_bw_epochs++;
+    bw_level_hist[bw]++;
+    feedback_stat.cur_bw_level = bw;
+  }
 }
 
 int MEMORY_CONTROLLER::add_rq(PACKET* packet)
@@ -154,6 +177,7 @@ int MEMORY_CONTROLLER::add_rq(PACKET* packet)
 
   *rq_it = *packet;
   rq_it->event_cycle = current_cycle;
+  rq_enqueue_count++;
 
   return get_occupancy(1, packet->address);
 }

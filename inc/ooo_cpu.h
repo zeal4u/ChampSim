@@ -83,6 +83,10 @@ public:
 
   CacheBus ITLB_bus, DTLB_bus, L1I_bus, L1D_bus;
 
+  // for pythia
+  uint64_t last_num_ins, last_ins_in_epoch, next_measure_ipc_cycle;
+  const static uint64_t measure_ipc_epoch = 1000;
+
   void operate();
 
   // functions

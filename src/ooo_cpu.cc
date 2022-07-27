@@ -33,6 +33,31 @@ void O3_CPU::operate()
 
   DISPATCH_BUFFER.operate();
   DECODE_BUFFER.operate();
+
+  // for feedback
+  if(current_cycle >= next_measure_ipc_cycle)
+    {
+        uint64_t ins_in_epoch = num_retired - last_num_ins;
+        if(ins_in_epoch >= last_ins_in_epoch)
+        {
+            /* IPC increased */
+            // MYLOG("Core-%u cycle %lu last_num_ins %lu last_ins_in_epoch %lu ins_in_epoch %lu UP", i, current_core_cycle[i], last_num_ins, last_ins_in_epoch, ins_in_epoch);
+            // broadcast_ipc(1);
+            L1D_bus.lower_level->feedback_stat.cur_ipc = 1;
+            L1I_bus.lower_level->feedback_stat.cur_ipc = 1;
+        }
+        else
+        {
+            /* IPC decreased */
+            // MYLOG("Core-%u cycle %lu last_num_ins %lu last_ins_in_epoch %lu ins_in_epoch %lu DOWN", i, current_core_cycle[i], last_num_ins, last_ins_in_epoch, ins_in_epoch);
+            // broadcast_ipc(0);
+            L1D_bus.lower_level->feedback_stat.cur_ipc = 0;
+            L1I_bus.lower_level->feedback_stat.cur_ipc = 0;
+        }
+        last_num_ins = num_retired;
+        last_ins_in_epoch = ins_in_epoch;
+        next_measure_ipc_cycle = current_cycle + measure_ipc_epoch;
+    }
 }
 
 void O3_CPU::initialize_core()

@@ -25,6 +25,13 @@ public:
   uint32_t lru = std::numeric_limits<uint32_t>::max() >> 1;
 };
 
+struct FeedbackStat {
+  // for pythia
+  uint8_t cur_bw_level = 0;
+  uint8_t cur_ipc = 0;
+  uint32_t acc_level = 0;
+};
+
 class MemoryRequestConsumer
 {
 public:
@@ -37,6 +44,8 @@ public:
    * >0 : new queue occupancy
    *
    */
+
+  FeedbackStat feedback_stat;
 
   const unsigned fill_level;
   virtual int add_rq(PACKET* packet) = 0;

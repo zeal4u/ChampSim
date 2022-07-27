@@ -14,6 +14,7 @@
 
 // virtual address space prefetching
 #define VA_PREFETCH_TRANSLATION_LATENCY 2
+#define CACHE_ACC_LEVELS 10
 
 extern std::array<O3_CPU*, NUM_CPUS> ooo_cpu;
 
@@ -70,6 +71,7 @@ public:
 
   int invalidate_entry(uint64_t inval_addr);
   int prefetch_line(uint64_t pf_addr, bool fill_this_level, uint32_t prefetch_metadata);
+  int prefetch_line(uint64_t pf_addr, unsigned fill_level, uint32_t prefetch_metadata, bool __old_version);
   int prefetch_line(uint64_t ip, uint64_t base_addr, uint64_t pf_addr, bool fill_this_level, uint32_t prefetch_metadata); // deprecated
 
   void add_mshr(PACKET* packet);
@@ -88,10 +90,25 @@ public:
 
   void print_deadlock() override;
 
+  std::string get_cache_type() const;
+
 #include "cache_modules.inc"
 
   const repl_t repl_type;
   const pref_t pref_type;
+
+  /* only for pythia */
+  /***************************************************************************/
+  function<uint32_t(uint32_t, uint64_t, uint64_t, uint32_t)> prefetcher_prefetch_hit;
+  FeedbackStat get_feedback();
+  
+  /* For cache accuracy measurement */
+  const uint64_t measure_cache_acc_epoch = 1024;
+  uint64_t next_measure_cycle;
+  uint64_t pf_useful_epoch, pf_filled_epoch;
+  uint32_t pref_acc;
+  uint64_t total_acc_epochs, acc_epoch_hist[CACHE_ACC_LEVELS];
+  /***************************************************************************/
 
   // constructor
   CACHE(std::string v1, double freq_scale, unsigned fill_level, uint32_t v2, int v3, uint32_t v5, uint32_t v6, uint32_t v7, uint32_t v8, uint32_t hit_lat,

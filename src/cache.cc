@@ -150,6 +150,14 @@ void CACHE::handle_prefetch()
     if (way < NUM_WAY) // HIT
     {
       readlike_hit(set, way, handle_pkt);
+
+      /* for pythia */
+      {
+        if(prefetcher_prefetch_hit && get_cache_type() == "L1D")
+        {
+            prefetcher_prefetch_hit(cpu, block[set*NUM_WAY + way].address<<LOG2_BLOCK_SIZE, handle_pkt.ip, handle_pkt.pf_metadata);
+        }
+      }
     } else {
       bool success = readlike_miss(handle_pkt);
       if (!success)
@@ -197,6 +205,7 @@ void CACHE::readlike_hit(std::size_t set, std::size_t way, PACKET& handle_pkt)
   // update prefetch stats and reset prefetch bit
   if (hit_block.prefetch) {
     pf_useful++;
+    pf_useful_epoch++; // for pythia
     hit_block.prefetch = 0;
   }
 }
@@ -234,8 +243,10 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
 
     if (mshr_entry->type == PREFETCH && handle_pkt.type != PREFETCH) {
       // Mark the prefetch as useful
-      if (mshr_entry->pf_origin_level == fill_level)
+      if (mshr_entry->pf_origin_level == fill_level) {
         pf_useful++;
+        pf_useful_epoch++; // for pythia
+      }
 
       uint64_t prior_event_cycle = mshr_entry->event_cycle;
       auto to_return = mshr_entry->to_return;
@@ -337,8 +348,10 @@ bool CACHE::filllike_miss(std::size_t set, std::size_t way, PACKET& handle_pkt)
     if (fill_block.prefetch)
       pf_useless++;
 
-    if (handle_pkt.type == PREFETCH)
+    if (handle_pkt.type == PREFETCH) {
       pf_fill++;
+      pf_filled_epoch++;
+    }
 
     fill_block.valid = true;
     fill_block.prefetch = (handle_pkt.type == PREFETCH && handle_pkt.pf_origin_level == fill_level);
@@ -376,6 +389,25 @@ void CACHE::operate()
   operate_reads();
 
   impl_prefetcher_cycle_operate();
+
+  // for pythia
+  if(current_cycle >= next_measure_cycle)
+  {
+    uint32_t this_epoch_accuracy = 0, acc_level = 0;
+    this_epoch_accuracy = pf_filled_epoch ? 100*(float)pf_useful_epoch/pf_filled_epoch : 0; 
+    pref_acc = (pref_acc + this_epoch_accuracy) / 2; // have some hysterisis
+    acc_level = (pref_acc / ((float)100/CACHE_ACC_LEVELS)); // quantize into 8 buckets
+    if(acc_level >= CACHE_ACC_LEVELS) acc_level = (CACHE_ACC_LEVELS - 1); // corner cases
+
+    pf_useful_epoch = 0;
+    pf_filled_epoch = 0;
+    next_measure_cycle = current_cycle + measure_cache_acc_epoch;
+
+    total_acc_epochs++;
+    acc_epoch_hist[acc_level]++;
+
+    this->feedback_stat.acc_level = acc_level;
+  }
 }
 
 void CACHE::operate_writes()
@@ -573,6 +605,35 @@ int CACHE::prefetch_line(uint64_t ip, uint64_t base_addr, uint64_t pf_addr, bool
   return prefetch_line(pf_addr, fill_this_level, prefetch_metadata);
 }
 
+
+int CACHE::prefetch_line(uint64_t pf_addr, unsigned fill_level, uint32_t prefetch_metadata, bool __old_version)
+{
+  PACKET pf_packet;
+  pf_packet.type = PREFETCH;
+  pf_packet.fill_level = fill_level;
+  pf_packet.pf_origin_level = this->fill_level;
+  pf_packet.pf_metadata = prefetch_metadata;
+  pf_packet.cpu = cpu;
+  pf_packet.address = pf_addr;
+  pf_packet.v_address = virtual_prefetch ? pf_addr : 0;
+
+  if (virtual_prefetch) {
+    if (!VAPQ.full()) {
+      VAPQ.push_back(pf_packet);
+      return 1;
+    }
+  } else {
+    int result = add_pq(&pf_packet);
+    if (result != -2) {
+      if (result > 0)
+        pf_issued++;
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 void CACHE::va_translate_prefetches()
 {
   // TEMPORARY SOLUTION: mark prefetches as translated after a fixed latency
@@ -730,4 +791,17 @@ void CACHE::print_deadlock()
   } else {
     std::cout << NAME << " MSHR empty" << std::endl;
   }
+}
+
+std::string CACHE::get_cache_type() const
+{
+  std::size_t found = NAME.find_last_of("_");
+  return NAME.substr(found+1);
+}
+
+FeedbackStat CACHE::get_feedback() 
+{
+  // update
+  feedback_stat.cur_bw_level = lower_level->feedback_stat.cur_bw_level;
+  return feedback_stat;
 }

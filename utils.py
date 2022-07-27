@@ -1436,7 +1436,7 @@ def get_coverage(data):
     return result
 
 def get_miss_per_kiloinstr(data):
-    cache = ['L1D', 'L2C', 'LLC']
+    cache = ['L1I', 'L1D', 'L2C', 'LLC']
     result = {}
     for k in data:
         one = {}

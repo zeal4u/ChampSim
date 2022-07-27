@@ -10,6 +10,8 @@
 #include "operable.h"
 #include "util.h"
 
+#define DRAM_BW_LEVELS 4
+
 // these values control when to send out a burst of writes
 constexpr std::size_t DRAM_WRITE_HIGH_WM = ((DRAM_WQ_SIZE * 7) >> 3);         // 7/8th
 constexpr std::size_t DRAM_WRITE_LOW_WM = ((DRAM_WQ_SIZE * 6) >> 3);          // 6/8th
@@ -58,7 +60,16 @@ public:
   const static uint64_t DRAM_DBUS_TURN_AROUND_TIME = detail::ceil(1.0 * DBUS_TURN_AROUND_NANOSECONDS * DRAM_IO_FREQ / 1000);
   const static uint64_t DRAM_DBUS_RETURN_TIME = detail::ceil(1.0 * BLOCK_SIZE / DRAM_CHANNEL_WIDTH);
 
+  // for measure bandwidth
+  const static uint64_t measure_dram_bw_epoch = 256;
+  const static uint64_t DRAM_DBUS_MAX_CAS = DRAM_CHANNELS * (measure_dram_bw_epoch / DRAM_DBUS_RETURN_TIME);
+
   std::array<DRAM_CHANNEL, DRAM_CHANNELS> channels;
+
+  /* to measure bandwidth */
+  uint64_t rq_enqueue_count, last_enqueue_count, epoch_enqueue_count, next_bw_measure_cycle;
+  uint64_t total_bw_epochs;
+  uint64_t bw_level_hist[DRAM_BW_LEVELS];
 
   MEMORY_CONTROLLER(double freq_scale) : champsim::operable(freq_scale), MemoryRequestConsumer(std::numeric_limits<unsigned>::max()) {}
 
