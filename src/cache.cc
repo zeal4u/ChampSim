@@ -153,7 +153,7 @@ void CACHE::handle_prefetch()
 
       /* for pythia */
       {
-        if(prefetcher_prefetch_hit && get_cache_type() == "L1D")
+        if(prefetcher_prefetch_hit)
         {
             prefetcher_prefetch_hit(cpu, block[set*NUM_WAY + way].address<<LOG2_BLOCK_SIZE, handle_pkt.ip, handle_pkt.pf_metadata);
         }
@@ -186,7 +186,7 @@ void CACHE::readlike_hit(std::size_t set, std::size_t way, PACKET& handle_pkt)
   handle_pkt.data = hit_block.data;
 
   // update prefetcher on load instruction
-  if (should_activate_prefetcher(handle_pkt.type) && handle_pkt.pf_origin_level < fill_level) {
+  if (should_activate_prefetcher(handle_pkt.type) && handle_pkt.fill_level < fill_level) {
     cpu = handle_pkt.cpu;
     uint64_t pf_base_addr = (virtual_prefetch ? handle_pkt.v_address : handle_pkt.address) & ~bitmask(match_offset_bits ? 0 : OFFSET_BITS);
     handle_pkt.pf_metadata = impl_prefetcher_cache_operate(pf_base_addr, handle_pkt.ip, 1, handle_pkt.type, handle_pkt.pf_metadata);
@@ -243,7 +243,7 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
 
     if (mshr_entry->type == PREFETCH && handle_pkt.type != PREFETCH) {
       // Mark the prefetch as useful
-      if (mshr_entry->pf_origin_level == fill_level) {
+      if (mshr_entry->fill_level == fill_level) {
         pf_useful++;
         pf_useful_epoch++; // for pythia
       }
@@ -293,7 +293,7 @@ bool CACHE::readlike_miss(PACKET& handle_pkt)
 
   // update prefetcher on load instructions and prefetches from upper levels
   // zeal4u: the miss must have a valid MSHR entry
-  if (should_activate_prefetcher(handle_pkt.type) && handle_pkt.pf_origin_level < fill_level) {
+  if (should_activate_prefetcher(handle_pkt.type) && handle_pkt.fill_level < fill_level) {
     cpu = handle_pkt.cpu;
     uint64_t pf_base_addr = (virtual_prefetch ? handle_pkt.v_address : handle_pkt.address) & ~bitmask(match_offset_bits ? 0 : OFFSET_BITS);
     handle_pkt.pf_metadata = impl_prefetcher_cache_operate(pf_base_addr, handle_pkt.ip, 0, handle_pkt.type, handle_pkt.pf_metadata);
@@ -354,7 +354,7 @@ bool CACHE::filllike_miss(std::size_t set, std::size_t way, PACKET& handle_pkt)
     }
 
     fill_block.valid = true;
-    fill_block.prefetch = (handle_pkt.type == PREFETCH && handle_pkt.pf_origin_level == fill_level);
+    fill_block.prefetch = (handle_pkt.type == PREFETCH && handle_pkt.fill_level == fill_level);
     fill_block.dirty = (handle_pkt.type == WRITEBACK || (handle_pkt.type == RFO && handle_pkt.to_return.empty()));
     fill_block.address = handle_pkt.address;
     fill_block.v_address = handle_pkt.v_address;

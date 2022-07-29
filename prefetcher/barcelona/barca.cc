@@ -63,7 +63,7 @@ int region_size = (BLOCK_SIZE * blocks_per_region);
 
 double mp[5] = {
 0.046,	// first level
-0.001,	// second level
+0.001,	// second level, zeal4u: why the second level prob is lower than the third?
 0.0275,	// third level
 0.007,	// fourth level
 0.0,	// not reached
