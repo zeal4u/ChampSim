@@ -37,17 +37,17 @@ def build_command(model, workload, n_warm, n_sim, is_cloud):
     if isinstance(workload, list):
         multi = True
         if len(set(workload)) == 1:
-            target_file = f"results_{len(workload)}core_{n_sim}M/mix0-{workload[0]}-{model}.txt" 
+            target_file = f"{CWD}/results_{len(workload)}core_{n_sim}M/mix0-{workload[0]}-{model}.txt" 
         else:
-            target_file = f"results_{len(workload)}core_{n_sim}M/mix-{hash(''.join(map(lambda x: x.replace('.champsimtrace.xz', ''), workload)))}-{model}.txt" 
+            target_file = f"{CWD}/results_{len(workload)}core_{n_sim}M/mix-{hash(''.join(map(lambda x: x.replace('.champsimtrace.xz', ''), workload)))}-{model}.txt" 
 
         traces = ' '.join([f"{TRACE_DIR}/{t}" for t in workload])
-        result_dir = f"results_{len(workload)}core_{n_sim}M"
+        result_dir = f"{CWD}/results_{len(workload)}core_{n_sim}M"
         run_model_command = f"({CWD}/bin/{model} -warmup_instructions {n_warm}000000 -simulation_instructions \
             {n_sim}000000 {'-c' if is_cloud else ''} -traces {traces}) &> {target_file}"
     else:
-        result_dir = f"results_{n_sim}M"
-        target_file = f"results_{n_sim}M/{workload}-{model}.txt"
+        result_dir = f"{CWD}./results_{n_sim}M"
+        target_file = f"{CWD}/results_{n_sim}M/{workload}-{model}.txt"
         run_model_command = f"({CWD}/bin/{model} -warmup_instructions {n_warm}000000 -simulation_instructions\
              {n_sim}000000 {'-c' if is_cloud else ''} -traces {TRACE_DIR}/{workload}) &> {target_file}"
         save_command = f"{CWD}/mongodb_tools.py {model} {workload}"
