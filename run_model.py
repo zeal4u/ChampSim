@@ -12,8 +12,11 @@ import utils
 from tqdm.autonotebook import tqdm
 from task_server import TaskManager
 
+
+CWD = os.getcwd()
+
 def cp_model(model, rip):
-    res = os.system(f"scp ./bin/{model} {rip}:/home/zeal4u/extraspace/Project/NewChampSim/bin/")
+    res = os.system(f"scp {CWD}/bin/{model} {rip}:/home/zeal4u/extraspace/Project/NewChampSim/bin/")
     # if res != 0:
         # exit(-1)
 
@@ -26,9 +29,9 @@ def save_to_db(result_dir, model, workloads):
 
 def build_command(model, workload, n_warm, n_sim, is_cloud):
     if is_cloud:
-        TRACE_DIR = "./cloudsuite"
+        TRACE_DIR = f"{CWD}/cloudsuite"
     else:
-        TRACE_DIR = "./total_traces"
+        TRACE_DIR = f"{CWD}/total_traces"
     
     multi = False
     if isinstance(workload, list):
@@ -40,19 +43,19 @@ def build_command(model, workload, n_warm, n_sim, is_cloud):
 
         traces = ' '.join([f"{TRACE_DIR}/{t}" for t in workload])
         result_dir = f"results_{len(workload)}core_{n_sim}M"
-        run_model_command = f"(./bin/{model} -warmup_instructions {n_warm}000000 -simulation_instructions \
+        run_model_command = f"({CWD}/bin/{model} -warmup_instructions {n_warm}000000 -simulation_instructions \
             {n_sim}000000 {'-c' if is_cloud else ''} -traces {traces}) &> {target_file}"
     else:
         result_dir = f"results_{n_sim}M"
         target_file = f"results_{n_sim}M/{workload}-{model}.txt"
-        run_model_command = f"(./bin/{model} -warmup_instructions {n_warm}000000 -simulation_instructions\
+        run_model_command = f"({CWD}/bin/{model} -warmup_instructions {n_warm}000000 -simulation_instructions\
              {n_sim}000000 {'-c' if is_cloud else ''} -traces {TRACE_DIR}/{workload}) &> {target_file}"
-        save_command = f"./mongodb_tools.py {model} {workload}"
+        save_command = f"{CWD}/mongodb_tools.py {model} {workload}"
     
     # os.makedirs(result_dir, exist_ok=True)
     xz_command = f"xz -zef {target_file}"
     workload = workload if isinstance(workload, str) else " ".join(workload)
-    save_command = f"./mongodb_tools.py {model} {workload} {'-m' if multi else ''} -r {result_dir}"
+    save_command = f"{CWD}/mongodb_tools.py {model} {workload} {'-m' if multi else ''} -r {result_dir}"
     # backup_command = f"scp {target_file+'.xz'} IntelBase:~/extraspace/Project/MyChampSim/{result_dir}/"
     return f"{run_model_command} && {xz_command} && {save_command}", target_file
 
@@ -98,7 +101,7 @@ def run_on_server(model, workloads, n_warm, n_sim, cover, is_cloud, ip_address='
     # over_msg = task_queue.get()
 
 def litmus_run(model):
-    command, target_file = build_command(model, "srv_408.champsimtrace.xz", 50, 200, False)
+    command, target_file = build_command(model, "srv_408.champsimtrace.xz", 1, 1, False)
     command = command.replace(f"&> {target_file}", "")
     os.system(command[: command.find("&&")])
 
